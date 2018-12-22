@@ -55,7 +55,7 @@ func countSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	listenAddr := flag.String("listenaddr", ":8080", "listen address eg :8080")
+	listenAddr := flag.String("listenaddr", ":8081", "listen address eg :8081")
 	addrPtr := flag.String("redisaddr", "127.0.0.1:6379", "redis address eg 127.0.0.1:6379")
 	flag.Parse()
 
