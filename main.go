@@ -1,13 +1,14 @@
 package main
 
 import (
+	"encoding/json"
+	"flag"
+	"log"
 	"net/http"
+	"time"
+
 	"github.com/go-redis/redis"
 	"github.com/google/uuid"
-	"time"
-	"encoding/json"
-	"log"
-	"flag"
 )
 
 const (
@@ -19,15 +20,15 @@ var lastCountTime time.Time = time.Now()
 var lastCount int = -1
 
 func getSession(w http.ResponseWriter, r *http.Request) {
-	if (r.Method == "GET") {
+	if r.Method == "GET" {
 		u, err := uuid.NewRandom()
-		if (err != nil) {
+		if err != nil {
 			return
 		}
 
-		redisClient.Set("session." + u.String(), "1", SESSION_EXPIRY)
+		redisClient.Set("session."+u.String(), "1", SESSION_EXPIRY)
 		json.NewEncoder(w).Encode(u)
-	} else if (r.Method == "DELETE") {
+	} else if r.Method == "DELETE" {
 		session := r.URL.Query().Get("session")
 		redisClient.Del("session." + session)
 	}
@@ -35,11 +36,11 @@ func getSession(w http.ResponseWriter, r *http.Request) {
 
 func pingSession(w http.ResponseWriter, r *http.Request) {
 	session := r.URL.Query().Get("session")
-	redisClient.Set("session." + session, "1", SESSION_EXPIRY)
+	redisClient.Set("session."+session, "1", SESSION_EXPIRY)
 }
 
 func countSession(w http.ResponseWriter, r *http.Request) {
-	if (lastCount == -1 || lastCountTime.Add(time.Duration(time.Minute)).Before(time.Now())) {
+	if lastCount == -1 || lastCountTime.Add(time.Duration(time.Minute)).Before(time.Now()) {
 		stringslice := redisClient.Keys("session.*")
 		lastCount = len(stringslice.Val())
 		lastCountTime = time.Now()
@@ -56,8 +57,8 @@ func main() {
 		Addr: *addrPtr,
 	})
 
-	http.HandleFunc("/", getSession);
-	http.HandleFunc("/ping", pingSession);
-	http.HandleFunc("/count", countSession);
+	http.HandleFunc("/", getSession)
+	http.HandleFunc("/ping", pingSession)
+	http.HandleFunc("/count", countSession)
 	log.Fatal(http.ListenAndServe(*listenAddr, nil))
 }
