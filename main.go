@@ -21,6 +21,11 @@ var lastCount = -1
 
 func init() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			w.WriteHeader(404)
+			return
+		}
+
 		switch r.Method {
 		case http.MethodGet:
 			u, err := uuid.NewRandom()
