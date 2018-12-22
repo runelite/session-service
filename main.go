@@ -16,8 +16,6 @@ const (
 )
 
 var redisClient *redis.Client
-var lastCountTime = time.Now()
-var lastCount = -1
 
 func init() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -71,13 +69,28 @@ func init() {
 }
 
 func init() {
-	http.HandleFunc("/count", func(w http.ResponseWriter, r *http.Request) {
-		if lastCount == -1 || lastCountTime.Add(time.Minute).Before(time.Now()) {
-			stringslice := redisClient.Keys("session.*")
-			lastCount = len(stringslice.Val())
-			lastCountTime = time.Now()
+	countResponse := []byte{'0'}
+	go func() {
+		ticker := time.NewTicker(time.Second * 5).C
+		for {
+			sessions, err := redisClient.Keys("session.*").Result()
+			if err != nil {
+				log.Printf("unable to get keys: %v\n", err)
+				time.Sleep(time.Second * 30)
+				continue
+			}
+
+			count := len(sessions)
+			newRes, err := json.Marshal(count)
+			if err != nil {
+				panic(err)
+			}
+			countResponse = newRes
+			<-ticker
 		}
-		json.NewEncoder(w).Encode(lastCount)
+	}()
+	http.HandleFunc("/count", func(w http.ResponseWriter, r *http.Request) {
+		w.Write(countResponse)
 	})
 }
 
