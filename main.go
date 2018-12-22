@@ -71,7 +71,7 @@ func init() {
 func init() {
 	countResponse := []byte{'0'}
 	go func() {
-		ticker := time.NewTicker(time.Second * 5).C
+		ticker := time.NewTicker(time.Minute).C
 		for {
 			sessions, err := redisClient.Keys("session.*").Result()
 			if err != nil {
