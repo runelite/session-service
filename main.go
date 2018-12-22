@@ -21,17 +21,28 @@ var lastCount = -1
 
 func init() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" {
+		switch r.Method {
+		case http.MethodGet:
 			u, err := uuid.NewRandom()
 			if err != nil {
+				log.Printf("unable to generate uuid: %v\n", err)
+				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 
-			redisClient.Set("session."+u.String(), "1", sessionExpiry)
+			_, err = redisClient.Set("session."+u.String(), "1", sessionExpiry).Result()
+			if err != nil {
+				log.Printf("unable to create new session: %v\n", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
 			json.NewEncoder(w).Encode(u)
-		} else if r.Method == "DELETE" {
+		case http.MethodDelete:
 			session := r.URL.Query().Get("session")
 			redisClient.Del("session." + session)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
 	})
 }
@@ -39,13 +50,24 @@ func init() {
 func init() {
 	http.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
 		session := r.URL.Query().Get("session")
-		redisClient.Set("session."+session, "1", sessionExpiry)
+		if len(session) != 36 {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		_, err := redisClient.Set("session."+session, "1", sessionExpiry).Result()
+		if err != nil {
+			log.Printf("unable to create new session: %v\n", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(200)
 	})
 }
 
 func init() {
 	http.HandleFunc("/count", func(w http.ResponseWriter, r *http.Request) {
-		if lastCount == -1 || lastCountTime.Add(time.Duration(time.Minute)).Before(time.Now()) {
+		if lastCount == -1 || lastCountTime.Add(time.Minute).Before(time.Now()) {
 			stringslice := redisClient.Keys("session.*")
 			lastCount = len(stringslice.Val())
 			lastCountTime = time.Now()
