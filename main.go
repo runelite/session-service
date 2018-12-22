@@ -12,40 +12,46 @@ import (
 )
 
 const (
-	SESSION_EXPIRY time.Duration = 11 * time.Minute
+	sessionExpiry = 11 * time.Minute
 )
 
 var redisClient *redis.Client
-var lastCountTime time.Time = time.Now()
-var lastCount int = -1
+var lastCountTime = time.Now()
+var lastCount = -1
 
-func getSession(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "GET" {
-		u, err := uuid.NewRandom()
-		if err != nil {
-			return
+func init() {
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			u, err := uuid.NewRandom()
+			if err != nil {
+				return
+			}
+
+			redisClient.Set("session."+u.String(), "1", sessionExpiry)
+			json.NewEncoder(w).Encode(u)
+		} else if r.Method == "DELETE" {
+			session := r.URL.Query().Get("session")
+			redisClient.Del("session." + session)
 		}
+	})
+}
 
-		redisClient.Set("session."+u.String(), "1", SESSION_EXPIRY)
-		json.NewEncoder(w).Encode(u)
-	} else if r.Method == "DELETE" {
+func init() {
+	http.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
 		session := r.URL.Query().Get("session")
-		redisClient.Del("session." + session)
-	}
+		redisClient.Set("session."+session, "1", sessionExpiry)
+	})
 }
 
-func pingSession(w http.ResponseWriter, r *http.Request) {
-	session := r.URL.Query().Get("session")
-	redisClient.Set("session."+session, "1", SESSION_EXPIRY)
-}
-
-func countSession(w http.ResponseWriter, r *http.Request) {
-	if lastCount == -1 || lastCountTime.Add(time.Duration(time.Minute)).Before(time.Now()) {
-		stringslice := redisClient.Keys("session.*")
-		lastCount = len(stringslice.Val())
-		lastCountTime = time.Now()
-	}
-	json.NewEncoder(w).Encode(lastCount)
+func init() {
+	http.HandleFunc("/count", func(w http.ResponseWriter, r *http.Request) {
+		if lastCount == -1 || lastCountTime.Add(time.Duration(time.Minute)).Before(time.Now()) {
+			stringslice := redisClient.Keys("session.*")
+			lastCount = len(stringslice.Val())
+			lastCountTime = time.Now()
+		}
+		json.NewEncoder(w).Encode(lastCount)
+	})
 }
 
 func main() {
@@ -57,8 +63,5 @@ func main() {
 		Addr: *addrPtr,
 	})
 
-	http.HandleFunc("/", getSession)
-	http.HandleFunc("/ping", pingSession)
-	http.HandleFunc("/count", countSession)
 	log.Fatal(http.ListenAndServe(*listenAddr, nil))
 }
