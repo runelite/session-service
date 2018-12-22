@@ -10,6 +10,8 @@ import (
 )
 
 var redisClient *redis.Client
+var lastCountTime time.Time = time.Now()
+var lastCount int = -1
 
 func getSession(w http.ResponseWriter, r *http.Request) {
 	if (r.Method == "GET") {
@@ -43,9 +45,12 @@ func pingSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func countSession(w http.ResponseWriter, r *http.Request) {
-	stringslice := redisClient.Keys("session.*")
-	sessionCount := len(stringslice.Val())
-	json.NewEncoder(w).Encode(sessionCount)
+	if (lastCount == -1 || lastCountTime.Add(time.Duration(time.Minute)).Before(time.Now())) {
+		stringslice := redisClient.Keys("session.*")
+		lastCount = len(stringslice.Val())
+		lastCountTime = time.Now()
+	}
+	json.NewEncoder(w).Encode(lastCount)
 }
 
 func main() {
