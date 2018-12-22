@@ -63,5 +63,10 @@ func main() {
 		Addr: *addrPtr,
 	})
 
+	_, err := redisClient.Ping().Result()
+	if err != nil {
+		log.Fatalf("unable to connect to Redis: %v\n", err)
+	}
+
 	log.Fatal(http.ListenAndServe(*listenAddr, nil))
 }
