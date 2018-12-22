@@ -55,7 +55,8 @@ func countSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	addrPtr := flag.String("redisaddr", "", "redis address eg 127.0.0.1:6379")
+	listenAddr := flag.String("listenaddr", ":8080", "listen address eg :8080")
+	addrPtr := flag.String("redisaddr", "127.0.0.1:6379", "redis address eg 127.0.0.1:6379")
 	flag.Parse()
 
 	redisClient = redis.NewClient(&redis.Options{
@@ -65,5 +66,5 @@ func main() {
 	http.HandleFunc("/", getSession);
 	http.HandleFunc("/ping", pingSession);
 	http.HandleFunc("/count", countSession);
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(*listenAddr, nil))
 }
