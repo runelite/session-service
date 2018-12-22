@@ -7,6 +7,7 @@ import (
 	"time"
 	"encoding/json"
 	"log"
+	"flag"
 )
 
 var redisClient *redis.Client
@@ -54,8 +55,11 @@ func countSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	addrPtr := flag.String("redisaddr", "", "redis address eg 127.0.0.1:6379")
+	flag.Parse()
+
 	redisClient = redis.NewClient(&redis.Options{
-		Addr:     "192.168.1.2:6379",
+		Addr: *addrPtr,
 	})
 
 	http.HandleFunc("/", getSession);
