@@ -10,6 +10,10 @@ import (
 	"flag"
 )
 
+const (
+	SESSION_EXPIRY time.Duration = 11 * time.Minute
+)
+
 var redisClient *redis.Client
 var lastCountTime time.Time = time.Now()
 var lastCount int = -1
@@ -21,12 +25,7 @@ func getSession(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		expiry, err := time.ParseDuration("11m")
-		if (err != nil) {
-			return
-		}
-
-		redisClient.Set("session." + u.String(), "1", expiry)
+		redisClient.Set("session." + u.String(), "1", SESSION_EXPIRY)
 		json.NewEncoder(w).Encode(u)
 	} else if (r.Method == "DELETE") {
 		session := r.URL.Query().Get("session")
@@ -36,13 +35,7 @@ func getSession(w http.ResponseWriter, r *http.Request) {
 
 func pingSession(w http.ResponseWriter, r *http.Request) {
 	session := r.URL.Query().Get("session")
-
-	expiry, err := time.ParseDuration("11m")
-	if (err != nil) {
-		return
-	}
-
-	redisClient.Set("session." + session, "1", expiry)
+	redisClient.Set("session." + session, "1", SESSION_EXPIRY)
 }
 
 func countSession(w http.ResponseWriter, r *http.Request) {
