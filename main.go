@@ -72,15 +72,25 @@ func init() {
 	countResponse := []byte{'0'}
 	go func() {
 		ticker := time.NewTicker(time.Minute).C
+	outer:
 		for {
-			sessions, err := redisClient.Keys("session.*").Result()
-			if err != nil {
-				log.Printf("unable to get keys: %v\n", err)
-				time.Sleep(time.Second * 30)
-				continue
+			var cursor uint64
+			var count int
+
+			for {
+				keys, cursor, err := redisClient.Scan(cursor, "session.*", 1000).Result()
+				if err != nil {
+					log.Printf("error scanning: %v\n", err)
+					time.Sleep(time.Second * 30)
+					continue outer
+				}
+
+				count += len(keys)
+				if cursor == 0 {
+					break
+				}
 			}
 
-			count := len(sessions)
 			newRes, err := json.Marshal(count)
 			if err != nil {
 				panic(err)
