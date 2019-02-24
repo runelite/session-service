@@ -78,7 +78,9 @@ func init() {
 			var count int
 
 			for {
-				keys, cursor, err := redisClient.Scan(cursor, "session.*", 1000).Result()
+				var keys []string
+				var err error
+				keys, cursor, err = redisClient.Scan(cursor, "session.*", 1000).Result()
 				if err != nil {
 					log.Printf("error scanning: %v\n", err)
 					time.Sleep(time.Second * 30)
