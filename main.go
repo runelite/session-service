@@ -5,6 +5,7 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-redis/redis"
@@ -13,6 +14,7 @@ import (
 
 const (
 	sessionExpiry = 11 * time.Minute
+	sessionKey = "session"
 )
 
 var redisClient *redis.Client
@@ -35,7 +37,10 @@ func init() {
 				return
 			}
 
-			_, err = redisClient.Set("session."+u.String(), "1", sessionExpiry).Result()
+			err = redisClient.ZAdd(sessionKey, redis.Z{
+				Score: float64(time.Now().Unix()),
+				Member: u.String(),
+			}).Err()
 			if err != nil {
 				log.Printf("unable to create new session: %v\n", err)
 				w.WriteHeader(http.StatusInternalServerError)
@@ -45,7 +50,7 @@ func init() {
 			json.NewEncoder(w).Encode(u)
 		case http.MethodDelete:
 			session := r.URL.Query().Get("session")
-			redisClient.Del("session." + session)
+			redisClient.ZRem(sessionKey, session)
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
@@ -60,7 +65,10 @@ func init() {
 			return
 		}
 
-		_, err := redisClient.Set("session."+session, "1", sessionExpiry).Result()
+		err := redisClient.ZAdd(sessionKey, redis.Z{
+			Score: float64(time.Now().Unix()),
+			Member: session,
+		}).Err()
 		if err != nil {
 			log.Printf("unable to create new session: %v\n", err)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -74,38 +82,36 @@ func init() {
 	countResponse := []byte{'0'}
 	go func() {
 		ticker := time.NewTicker(time.Minute).C
-	outer:
-		for {
-			var cursor uint64
-			var count int
-
-			for {
-				var keys []string
-				var err error
-				keys, cursor, err = redisClient.Scan(cursor, "session.*", 1000).Result()
-				if err != nil {
-					log.Printf("error scanning: %v\n", err)
-					time.Sleep(time.Second * 30)
-					continue outer
-				}
-
-				count += len(keys)
-				if cursor == 0 {
-					break
-				}
+		for range ticker {
+			result, err := redisClient.ZRangeByScore(sessionKey, redis.ZRangeBy {
+				Min: strconv.Itoa(int(time.Now().Unix()) - int(sessionExpiry.Seconds())),
+				Max: strconv.Itoa(int(time.Now().Unix())),
+			}).Result()
+			if err != nil {
+				log.Printf("error running zrangebyscore: %v\n", err)
+				continue
 			}
 
-			newRes, err := json.Marshal(count)
+			newRes, err := json.Marshal(len(result))
 			if err != nil {
 				panic(err)
 			}
+
 			countResponse = newRes
-			<-ticker
 		}
 	}()
 	http.HandleFunc("/count", func(w http.ResponseWriter, r *http.Request) {
 		w.Write(countResponse)
 	})
+}
+
+func init() {
+	go func() {
+		ticker := time.NewTicker(time.Minute).C
+		for range ticker {
+			redisClient.ZRemRangeByScore(sessionKey, "-inf", strconv.Itoa(int(time.Now().Unix()) - int(sessionExpiry.Seconds())))
+		}
+	}()
 }
 
 func main() {
