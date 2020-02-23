@@ -15,6 +15,7 @@ import (
 const (
 	sessionExpiry = 11 * time.Minute
 	sessionKey = "session"
+	loggedInKey = "loggedin"
 )
 
 var redisClient *redis.Client
@@ -59,7 +60,8 @@ func init() {
 
 func init() {
 	http.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
-		session := r.URL.Query().Get("session")
+		query := r.URL.Query()
+		session := query.Get("session")
 		if len(session) != 36 {
 			w.WriteHeader(http.StatusBadRequest)
 			return
@@ -74,12 +76,25 @@ func init() {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+
+		loggedIn := query.Get("logged-in")
+		if loggedIn == "true" {
+			err = redisClient.ZAdd(loggedInKey, redis.Z{
+				Score: float64(time.Now().Unix()),
+				Member: session,
+			}).Err()
+			if err != nil {
+				log.Printf("unable to zadd to logged in: %v\n", err)
+			}
+		}
+
 		w.WriteHeader(200)
 	})
 }
 
 func init() {
 	countResponse := []byte{'0'}
+	loggedInResponse := []byte{'0'}
 	go func() {
 		ticker := time.NewTicker(time.Minute).C
 		for range ticker {
@@ -89,19 +104,36 @@ func init() {
 			}).Result()
 			if err != nil {
 				log.Printf("error running zrangebyscore: %v\n", err)
-				continue
+			} else {
+				newRes, err := json.Marshal(len(result))
+				if err != nil {
+					panic(err)
+				}
+
+				countResponse = newRes
 			}
 
-			newRes, err := json.Marshal(len(result))
+			result, err = redisClient.ZRangeByScore(loggedInKey, redis.ZRangeBy {
+				Min: strconv.Itoa(int(time.Now().Unix()) - int(sessionExpiry.Seconds())),
+				Max: strconv.Itoa(int(time.Now().Unix())),
+			}).Result()
 			if err != nil {
-				panic(err)
-			}
+				log.Printf("error running zrangebyscore: %v\n", err)
+			} else {
+				newRes, err := json.Marshal(len(result))
+				if err != nil {
+					panic(err)
+				}
 
-			countResponse = newRes
+				loggedInResponse = newRes
+			}
 		}
 	}()
 	http.HandleFunc("/count", func(w http.ResponseWriter, r *http.Request) {
 		w.Write(countResponse)
+	})
+	http.HandleFunc("/count/logged-in", func(w http.ResponseWriter, r *http.Request) {
+		w.Write(loggedInResponse)
 	})
 }
 
@@ -110,6 +142,7 @@ func init() {
 		ticker := time.NewTicker(time.Minute).C
 		for range ticker {
 			redisClient.ZRemRangeByScore(sessionKey, "-inf", strconv.Itoa(int(time.Now().Unix()) - int(sessionExpiry.Seconds())))
+			redisClient.ZRemRangeByScore(loggedInKey, "-inf", strconv.Itoa(int(time.Now().Unix()) - int(sessionExpiry.Seconds())))
 		}
 	}()
 }
