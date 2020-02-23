@@ -52,6 +52,7 @@ func init() {
 		case http.MethodDelete:
 			session := r.URL.Query().Get("session")
 			redisClient.ZRem(sessionKey, session)
+			redisClient.ZRem(loggedInKey, session)
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
