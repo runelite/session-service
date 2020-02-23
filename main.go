@@ -26,6 +26,8 @@ func init() {
 
 		switch r.Method {
 		case http.MethodGet:
+			fallthrough
+		case http.MethodPost:
 			u, err := uuid.NewRandom()
 			if err != nil {
 				log.Printf("unable to generate uuid: %v\n", err)
